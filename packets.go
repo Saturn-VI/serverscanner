@@ -1,5 +1,9 @@
 package main
 
+import (
+	"fmt"
+)
+
 // https://minecraft.wiki/w/Java_Edition_protocol/Server_List_Ping#Handshake
 func CreateHandshakePacket(address string, port uint16, nextState int) Packet {
 	var data []byte
@@ -22,4 +26,16 @@ func CreateStatusRequestPacket() Packet {
 		id:   CreateVarInt(0x00), // Status Request packet ID
 		data: []byte{},
 	}
+}
+
+// https://minecraft.wiki/w/Java_Edition_protocol/Server_List_Ping#Status_Response
+func DecodeServerStatusResponse(packet Packet) (string, error) {
+	if packet.id.bytes[0] != 0x00 {
+		return "", fmt.Errorf("unexpected packet ID: %x", packet.id.bytes[0])
+	}
+	response, _, err := ReadString(String{bytes: packet.data})
+	if err != nil {
+		return "", err
+	}
+	return response, nil
 }

@@ -2,8 +2,8 @@ package main
 
 import (
 	"fmt"
-	"os"
 	"net"
+	"os"
 )
 
 const DEFAULT_PORT = 25565
@@ -26,9 +26,6 @@ func main() {
 	fmt.Println("Connected to server:", conn.RemoteAddr())
 	hs := CreateHandshakePacket(os.Args[1], uint16(DEFAULT_PORT), 1).ToBytes()
 	sr := CreateStatusRequestPacket().ToBytes()
-
-	fmt.Printf("Handshake Packet (%d bytes): %s\n", len(hs), string(hs))
-	fmt.Printf("Status Request Packet (%d bytes): %s\n", len(sr), string(sr))
 	n, err := conn.Write(hs)
 	if err != nil {
 		fmt.Println("Error sending handshake packet:", err)
@@ -41,12 +38,42 @@ func main() {
 		return
 	}
 	fmt.Printf("Sent %d bytes for status request packet\n", n)
-	buf := make([]byte, 8192)
-	n, err = conn.Read(buf)
+
+	// Read the response from the server
+	// This is done in a loop to ensure that the entire packet is read
+	buf := make([]byte, 0, 4096) // Start with a 0-length slice backed by a 4096-byte array
+	tmp := make([]byte, 1024)
+	var totalPacketLength int
+
+	for {
+		n, err := conn.Read(tmp)
+		if err != nil {
+			fmt.Println("Error reading response from server:", err)
+			return
+		}
+		buf = append(buf, tmp[:n]...)
+
+		if totalPacketLength == 0 {
+			packetLength, bytesRead, err := ReadVarInt(buf)
+			if err == nil {
+				totalPacketLength = packetLength + bytesRead
+			}
+		}
+
+		if totalPacketLength != 0 && len(buf) >= totalPacketLength {
+			break
+		}
+	}
+
+	data, n, err := ReadPacket(buf)
 	if err != nil {
-		fmt.Println("Error reading response from server:", err)
+		fmt.Println("Error reading packet:", err)
 		return
 	}
-	fmt.Printf("Response from server (%d bytes): %s\n", n, buf[:n])
-	// fmt.Printf("First few bytes: % x\n", buf[:n])
+	response, err := DecodeServerStatusResponse(data)
+	if err != nil {
+		fmt.Println("Error decoding server status response:", err)
+		return
+	}
+	fmt.Printf("Server status response length: %d\n", len(response))
 }
