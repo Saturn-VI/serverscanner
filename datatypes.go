@@ -34,7 +34,7 @@ func CreateVarInt(value int) VarInt {
 			break
 		}
 
-		bytes = append(bytes, byte((value & SEGMENT_BITS) | CONTINUE_BIT))
+		bytes = append(bytes, byte((value&SEGMENT_BITS)|CONTINUE_BIT))
 
 		value = int(uint(value) >> 7)
 	}
