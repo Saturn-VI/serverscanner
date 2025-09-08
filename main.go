@@ -76,4 +76,5 @@ func main() {
 		return
 	}
 	fmt.Printf("Server status response length: %d\n", len(response))
+	ProcessJsonResponse(response)
 }
