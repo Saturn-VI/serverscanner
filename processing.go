@@ -2,7 +2,6 @@ package main
 
 import (
 	"encoding/json"
-	"fmt"
 
 	"github.com/google/uuid"
 )
@@ -71,11 +70,13 @@ type ModpackDataInfo struct {
 	Version   string `json:"version"`
 }
 
-func ProcessJsonResponse(jsonStr string) (ServerStatus, error) {
+func ProcessJsonResponse(jsonStr string) (*ServerStatus, error) {
 	ssDTO := &ServerStatusDTO{}
-	json.Unmarshal([]byte(jsonStr), ssDTO)
+	err := json.Unmarshal([]byte(jsonStr), ssDTO)
+	if err != nil {
+		return nil, err
+	}
 
-	fmt.Println(ssDTO)
 	isFake := false
 	var isOnline *bool = nil
 
@@ -126,5 +127,5 @@ func ProcessJsonResponse(jsonStr string) (ServerStatus, error) {
 		IsFakeSample: isFake,
 		IsOnlineMode: isOnline,
 	}
-	return serverStatus, nil
+	return &serverStatus, nil
 }
