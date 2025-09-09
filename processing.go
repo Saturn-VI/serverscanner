@@ -7,6 +7,9 @@ import (
 	"github.com/google/uuid"
 )
 
+const FAKE_SAMPLE_DESCRIPTION = "To protect the privacy of this server and its\nusers, you must log in once to see ping data."
+const ANONYMOUS_PLAYER_NAME = "Anonymous Player"
+
 type ServerStatusDTO struct {
 	Version            VersionInfo  `json:"version"`
 	Players            *PlayersInfo `json:"players,omitempty"`
@@ -33,8 +36,9 @@ type ServerStatusDTO struct {
 type ServerStatus struct {
 	ServerStatusDTO
 
+	// IsFakeSample should take precedence over IsOnlineMode
 	IsFakeSample bool
-	IsOnlineMode bool
+	IsOnlineMode *bool
 }
 
 type VersionInfo struct {
@@ -43,14 +47,14 @@ type VersionInfo struct {
 }
 
 type PlayersInfo struct {
-	Max    int            `json:"max"`
-	Online int            `json:"online"`
-	Sample []SamplePlayer `json:"sample,omitempty"`
+	Max    int             `json:"max"`
+	Online int             `json:"online"`
+	Sample *[]SamplePlayer `json:"sample,omitempty"`
 }
 
 type SamplePlayer struct {
-	Name string    `json:"name"`
-	ID   uuid.UUID `json:"id"`
+	Name *string    `json:"name,omitempty"`
+	ID   *uuid.UUID `json:"id,omitempty"`
 }
 
 type ForgeDataInfo struct {
@@ -67,18 +71,60 @@ type ModpackDataInfo struct {
 	Version   string `json:"version"`
 }
 
-// TODO implement
 func ProcessJsonResponse(jsonStr string) (ServerStatus, error) {
 	ssDTO := &ServerStatusDTO{}
 	json.Unmarshal([]byte(jsonStr), ssDTO)
 
 	fmt.Println(ssDTO)
+	isFake := false
+	var isOnline *bool = nil
+
+	if ssDTO.Description == FAKE_SAMPLE_DESCRIPTION {
+		isFake = true
+	}
+
+	seenUUIDs := make(map[uuid.UUID]bool)
+	for _, player := range *ssDTO.Players.Sample {
+		// must have name and uuid
+		if player.Name == nil || player.ID == nil {
+			isFake = true
+			break
+		}
+		// no duplicate uuids
+		if _, exists := seenUUIDs[*player.ID]; exists {
+			isFake = true
+			break
+		}
+		seenUUIDs[*player.ID] = true
+
+		id, err := uuid.Parse(player.ID.String())
+		if err != nil {
+			if *player.Name == ANONYMOUS_PLAYER_NAME {
+				// allow anonymous player with invalid UUID
+				continue
+			}
+			isFake = true
+			break
+		}
+		switch id.Version() {
+		case 4:
+			// online mode
+			isOnline = newTrue()
+		case 3:
+			// offline mode
+			if isOnline == nil {
+				isOnline = newFalse()
+			}
+		default:
+			isFake = true
+		}
+	}
 
 	serverStatus := ServerStatus{
 		ServerStatusDTO: *ssDTO,
-		// TODO determine these values
-		IsFakeSample: false,
-		IsOnlineMode: true,
+
+		IsFakeSample: isFake,
+		IsOnlineMode: isOnline,
 	}
 	return serverStatus, nil
 }
