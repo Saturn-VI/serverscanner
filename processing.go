@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"net"
 
 	"github.com/google/uuid"
 )
@@ -34,10 +35,11 @@ type ServerStatusDTO struct {
 
 type ServerStatus struct {
 	ServerStatusDTO
+	net.Addr `json:"addr,omitempty"`
 
 	// IsFakeSample should take precedence over IsOnlineMode
-	IsFakeSample bool
-	IsOnlineMode *bool
+	IsFakeSample bool  `json:"isFakeSample"`
+	IsOnlineMode *bool `json:"isOnlineMode,omitempty"`
 }
 
 type VersionInfo struct {
@@ -84,6 +86,15 @@ func ProcessJsonResponse(jsonStr string) (*ServerStatus, error) {
 		isFake = true
 	}
 
+	if ssDTO.Players == nil || ssDTO.Players.Sample == nil {
+		// no sample means we can't determine if it's online or offline mode
+		return &ServerStatus{
+			ServerStatusDTO: *ssDTO,
+
+			IsFakeSample: true,
+			IsOnlineMode: nil,
+		}, nil
+	}
 	seenUUIDs := make(map[uuid.UUID]bool)
 	for _, player := range *ssDTO.Players.Sample {
 		// must have name and uuid
