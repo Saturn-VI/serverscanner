@@ -25,6 +25,18 @@ type Packet struct {
 	data []byte
 }
 
+// ts pmo bro
+
+func newTrue() *bool {
+	b := true
+	return &b
+}
+
+func newFalse() *bool {
+	b := false
+	return &b
+}
+
 // https://minecraft.wiki/w/Java_Edition_protocol/Packets#VarInt_and_VarLong
 func CreateVarInt(value int) VarInt {
 	var bytes []byte
