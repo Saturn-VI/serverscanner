@@ -72,7 +72,7 @@ type ModpackDataInfo struct {
 	Version   string `json:"version"`
 }
 
-func ProcessJsonResponse(jsonStr string) (*ServerStatus, error) {
+func ProcessJsonResponse(jsonStr string, addr net.Addr) (*ServerStatus, error) {
 	ssDTO := &ServerStatusDTO{}
 	err := json.Unmarshal([]byte(jsonStr), ssDTO)
 	if err != nil {
@@ -90,11 +90,13 @@ func ProcessJsonResponse(jsonStr string) (*ServerStatus, error) {
 		// no sample means we can't determine if it's online or offline mode
 		return &ServerStatus{
 			ServerStatusDTO: *ssDTO,
+			Addr:            addr,
 
 			IsFakeSample: true,
 			IsOnlineMode: nil,
 		}, nil
 	}
+
 	seenUUIDs := make(map[uuid.UUID]bool)
 	for _, player := range *ssDTO.Players.Sample {
 		// must have name and uuid
@@ -134,6 +136,7 @@ func ProcessJsonResponse(jsonStr string) (*ServerStatus, error) {
 
 	serverStatus := ServerStatus{
 		ServerStatusDTO: *ssDTO,
+		Addr:            addr,
 
 		IsFakeSample: isFake,
 		IsOnlineMode: isOnline,

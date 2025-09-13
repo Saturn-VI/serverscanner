@@ -3,32 +3,59 @@ package main
 import (
 	"fmt"
 	"net"
-	"os"
+	"sync"
 )
 
 const DEFAULT_PORT = 25565
 
 func main() {
-	if len(os.Args) < 2 {
-		fmt.Println("Please provide an IP address as an argument")
-		return
-	}
-	fmt.Println(os.Args[1])
+	jobs := make(chan net.IP, 25)
+	results := make(chan *ServerStatus, 25)
+	errors := make(chan error, 25)
 
-	fmt.Println(GetServerStatus(os.Args[1], DEFAULT_PORT))
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go worker(&wg, jobs, results, errors)
+
+	jobs <- net.IP{5, 161, 74, 148}
+	close(jobs)
+
+	go func() {
+		wg.Wait()
+		close(results)
+		close(errors)
+	}()
+
+	for result := range results {
+		fmt.Println(result.Players)
+	}
 }
 
-func GetServerStatus(address string, port int) (*ServerStatus, error) {
+func worker(wg *sync.WaitGroup, jobs <-chan net.IP, results chan<- *ServerStatus, errors chan<- error) {
+	defer wg.Done()
+	for ip := range jobs {
+		status, err := GetServerStatus(ip, DEFAULT_PORT)
+		if err != nil {
+			errors <- err
+			continue
+		}
+		results <- status
+	}
+}
+
+func GetServerStatus(ip net.IP, port int) (*ServerStatus, error) {
+	address := ip.String()
+	tcpAddr := &net.TCPAddr{IP: ip, Port: port}
 	// Initial server connection
 	// brackets are there for IPv6
-	conn, err := net.Dial("tcp", fmt.Sprintf("[%s]:%d", os.Args[1], DEFAULT_PORT))
+	conn, err := net.Dial("tcp", fmt.Sprintf("[%s]:%d", address, DEFAULT_PORT))
 	if err != nil {
 		return nil, err
 	}
 	defer conn.Close()
 
 	// Send handshake and status request packets
-	hs := CreateHandshakePacket(os.Args[1], uint16(DEFAULT_PORT), 1).ToBytes()
+	hs := CreateHandshakePacket(address, uint16(DEFAULT_PORT), 1).ToBytes()
 	_, err = conn.Write(hs)
 	if err != nil {
 		return nil, err
@@ -80,5 +107,5 @@ func GetServerStatus(address string, port int) (*ServerStatus, error) {
 		return nil, err
 	}
 
-	return ProcessJsonResponse(response)
+	return ProcessJsonResponse(response, tcpAddr)
 }
