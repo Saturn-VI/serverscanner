@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"net"
 )
 
@@ -25,6 +26,64 @@ var EXCLUDE_RANGES = [...]IPRange{
 	{start: net.IP{198, 51, 100, 0}, end: net.IP{198, 51, 100, 255}},
 	{start: net.IP{203, 0, 113, 0}, end: net.IP{203, 0, 113, 255}},
 	{start: net.IP{224, 0, 0, 0}, end: net.IP{239, 255, 255, 255}},
-	{start: net.IP{233, 252, 0, 0}, end: net.IP{233, 252, 0, 255}},
+	{start: net.IP{233, 252, 0, 0}, end: net.IP{239, 255, 255, 255}},
 	{start: net.IP{240, 0, 0, 0}, end: net.IP{255, 255, 255, 255}},
+}
+
+var MAX_IP = net.IP{255, 255, 255, 255}
+var MIN_IP = net.IP{0, 0, 0, 0}
+
+func incrementIP(ip net.IP) net.IP {
+	if (ip.Equal(MAX_IP)) {
+		return ip
+	}
+	newIP := make(net.IP, len(ip))
+	copy(newIP, ip)
+	for i := len(newIP) - 1; i >= 0; i-- {
+		newIP[i]++
+		if newIP[i] != 0 {
+			break
+		}
+	}
+	return newIP
+}
+
+func decrementIP(ip net.IP) net.IP {
+	if (ip.Equal(MIN_IP)) {
+		return ip
+	}
+	newIP := make(net.IP, len(ip))
+	copy(newIP, ip)
+	for i := len(newIP) - 1; i >= 0; i-- {
+		if newIP[i] > 0 {
+			newIP[i]--
+			break
+		} else {
+			newIP[i] = 255
+		}
+	}
+	return newIP
+}
+
+func GenerateAllowedRanges() []IPRange {
+	var allowed []IPRange
+
+	// Start with the full range
+	currentStart := net.IP{0, 0, 0, 0}
+
+	for _, exclude := range EXCLUDE_RANGES {
+		// If there's a gap between currentStart and the start of the exclude range, add it to allowed
+		if bytes.Compare(currentStart, exclude.start) < 0 {
+			allowed = append(allowed, IPRange{start: currentStart, end: decrementIP(exclude.start)})
+		}
+		// Move currentStart to the end of the exclude range + 1
+		currentStart = incrementIP(exclude.end)
+	}
+
+	// The last exclude range goes to 255.255.255.255, so this just goes to 240.0.0.0
+	if bytes.Compare(currentStart, net.IP{240, 0, 0, 0}) <= 0 {
+		allowed = append(allowed, IPRange{start: currentStart, end: net.IP{240, 0, 0, 0}})
+	}
+
+	return allowed
 }

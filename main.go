@@ -29,6 +29,8 @@ func main() {
 	for result := range results {
 		fmt.Println(result.Players)
 	}
+
+	fmt.Println(GenerateAllowedRanges())
 }
 
 func worker(wg *sync.WaitGroup, jobs <-chan net.IP, results chan<- *ServerStatus, errors chan<- error) {
