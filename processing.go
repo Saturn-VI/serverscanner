@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"net"
 
 	"github.com/google/uuid"
@@ -10,10 +11,30 @@ import (
 const FAKE_SAMPLE_DESCRIPTION = "To protect the privacy of this server and its\nusers, you must log in once to see ping data."
 const ANONYMOUS_PLAYER_NAME = "Anonymous Player"
 
+type Description string
+
+func (d *Description) UnmarshalJSON(data []byte) error {
+	var s string
+	if err := json.Unmarshal(data, &s); err == nil {
+		*d = Description(s)
+		return nil
+	}
+
+	var obj struct {
+		Text string `json:"text"`
+	}
+	if err := json.Unmarshal(data, &obj); err == nil {
+		*d = Description(string(obj.Text))
+		return nil
+	}
+
+	return fmt.Errorf("invalid description format")
+}
+
 type ServerStatusDTO struct {
 	Version            VersionInfo  `json:"version"`
 	Players            *PlayersInfo `json:"players,omitempty"`
-	Description        string       `json:"description"`
+	Description        Description  `json:"description"`
 	Favicon            *string      `json:"favicon,omitempty"`
 	EnforcesSecureChat *bool        `json:"enforcesSecureChat,omitempty"`
 	PreviewsChat       *bool        `json:"previewsChat,omitempty"`

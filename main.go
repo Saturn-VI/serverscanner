@@ -3,37 +3,60 @@ package main
 import (
 	"fmt"
 	"net"
+	"strings"
 	"sync"
+	"time"
 )
 
 const DEFAULT_PORT = 25565
 
+var DEBUG_IP = net.IP{5, 161, 74, 148}
+
 func main() {
-	jobs := make(chan net.IP, 25)
-	results := make(chan *ServerStatus, 25)
-	errors := make(chan error, 25)
-
+	jobs := make(chan net.IP, 100)
+	results := make(chan *ServerStatus, 100)
+	errors := make(chan error, 100)
 	var wg sync.WaitGroup
-	wg.Add(1)
-	go worker(&wg, jobs, results, errors)
 
-	jobs <- net.IP{5, 161, 74, 148}
-	close(jobs)
-
-	go func() {
-		wg.Wait()
-		close(results)
-		close(errors)
-	}()
-
-	for result := range results {
-		fmt.Println(result.Players)
+	for _ = range 100000 {
+		wg.Add(1)
+		go worker(jobs, results, errors, &wg)
 	}
 
-	fmt.Println(GenerateAllowedRanges())
+	go func() {
+		jobs <- DEBUG_IP
+		SendIPsToChannel(jobs, GenerateAllowedRanges())
+		close(jobs)
+	}()
+
+	var readWg sync.WaitGroup
+	readWg.Add(2)
+
+	go func() {
+		defer readWg.Done()
+		for err := range errors {
+			if strings.HasPrefix(err.Error(), "dial tcp") || strings.HasPrefix(err.Error(), "read tcp") || strings.HasSuffix(err.Error(), "connection reset by peer") {
+				continue
+			}
+			fmt.Println("Error:", err)
+		}
+	}()
+
+	go func() {
+		defer readWg.Done()
+		for result := range results {
+			fmt.Println("Result:", result.Addr)
+			fmt.Println(result.Players)
+		}
+	}()
+
+	wg.Wait()
+	close(results)
+	close(errors)
+	readWg.Wait()
 }
 
-func worker(wg *sync.WaitGroup, jobs <-chan net.IP, results chan<- *ServerStatus, errors chan<- error) {
+func worker(jobs <-chan net.IP, results chan<- *ServerStatus, errors chan<- error, wg *sync.WaitGroup) {
 	defer wg.Done()
 	for ip := range jobs {
 		status, err := GetServerStatus(ip, DEFAULT_PORT)
@@ -41,6 +64,7 @@ func worker(wg *sync.WaitGroup, jobs <-chan net.IP, results chan<- *ServerStatus
 			errors <- err
 			continue
 		}
+		fmt.Println("worked")
 		results <- status
 	}
 }
@@ -50,7 +74,7 @@ func GetServerStatus(ip net.IP, port int) (*ServerStatus, error) {
 	tcpAddr := &net.TCPAddr{IP: ip, Port: port}
 	// Initial server connection
 	// brackets are there for IPv6
-	conn, err := net.Dial("tcp", fmt.Sprintf("[%s]:%d", address, DEFAULT_PORT))
+	conn, err := net.DialTimeout("tcp", fmt.Sprintf("[%s]:%d", address, DEFAULT_PORT), time.Second*1)
 	if err != nil {
 		return nil, err
 	}
@@ -78,7 +102,9 @@ func GetServerStatus(ip net.IP, port int) (*ServerStatus, error) {
 	for {
 		n, err := conn.Read(tmp)
 		if err != nil {
-			fmt.Println("Error reading response from server:", err)
+			if (err.Error() == "EOF") {
+				break
+			}
 			return nil, err
 		}
 		buf = append(buf, tmp[:n]...)

@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"fmt"
 	"net"
 )
 
@@ -34,7 +35,7 @@ var MAX_IP = net.IP{255, 255, 255, 255}
 var MIN_IP = net.IP{0, 0, 0, 0}
 
 func incrementIP(ip net.IP) net.IP {
-	if (ip.Equal(MAX_IP)) {
+	if ip.Equal(MAX_IP) {
 		return ip
 	}
 	newIP := make(net.IP, len(ip))
@@ -49,7 +50,7 @@ func incrementIP(ip net.IP) net.IP {
 }
 
 func decrementIP(ip net.IP) net.IP {
-	if (ip.Equal(MIN_IP)) {
+	if ip.Equal(MIN_IP) {
 		return ip
 	}
 	newIP := make(net.IP, len(ip))
@@ -86,4 +87,16 @@ func GenerateAllowedRanges() []IPRange {
 	}
 
 	return allowed
+}
+
+func SendIPsToChannel(ips chan<- net.IP, ranges []IPRange) {
+	counter := 0
+	for _, r := range ranges {
+		for ip := r.start; bytes.Compare(ip, r.end) <= 0; ip = incrementIP(ip) {
+			ips <- ip
+			counter++
+			fmt.Printf("Sent: %d\r", counter)
+		}
+	}
+	close(ips)
 }
