@@ -45,8 +45,8 @@ func main() {
 	go func() {
 		defer readWg.Done()
 		for result := range results {
-			fmt.Println("Result:", result.Addr)
-			fmt.Println(result.Players)
+			fmt.Println("Result:", result.Addr, "Version:", result.Version.Name)
+			fmt.Println(result.Players.Online, "/", result.Players.Max, "players online")
 		}
 	}()
 
