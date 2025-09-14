@@ -35,7 +35,9 @@ func main() {
 	go func() {
 		defer readWg.Done()
 		for err := range errors {
-			if strings.HasPrefix(err.Error(), "dial tcp") || strings.HasPrefix(err.Error(), "read tcp") || strings.HasSuffix(err.Error(), "connection reset by peer") {
+			if strings.HasPrefix(err.Error(), "dial tcp") ||
+				strings.HasPrefix(err.Error(), "read tcp") ||
+				strings.HasSuffix(err.Error(), "connection reset by peer") {
 				continue
 			}
 			fmt.Println("Error:", err)
@@ -102,7 +104,7 @@ func GetServerStatus(ip net.IP, port int) (*ServerStatus, error) {
 	for {
 		n, err := conn.Read(tmp)
 		if err != nil {
-			if (err.Error() == "EOF") {
+			if err.Error() == "EOF" {
 				break
 			}
 			return nil, err
