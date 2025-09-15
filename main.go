@@ -30,32 +30,65 @@ func main() {
 	}()
 
 	var readWg sync.WaitGroup
-	readWg.Add(2)
+	readWg.Add(1)
 
-	go func() {
-		defer readWg.Done()
-		for err := range errors {
-			if strings.HasPrefix(err.Error(), "dial tcp") ||
-				strings.HasPrefix(err.Error(), "read tcp") ||
-				strings.HasSuffix(err.Error(), "connection reset by peer") {
-				continue
-			}
-			fmt.Println("Error:", err)
-		}
-	}()
+	// go func() {
+	// 	defer readWg.Done()
+	// 	for err := range errors {
+	// 		if strings.HasPrefix(err.Error(), "dial tcp") ||
+	// 			strings.HasPrefix(err.Error(), "read tcp") ||
+	// 			strings.HasSuffix(err.Error(), "connection reset by peer") {
+	// 			continue
+	// 		}
+	// 		fmt.Println("Error:", err)
+	// 	}
+	// }()
 
-	go func() {
-		defer readWg.Done()
-		for result := range results {
-			fmt.Println("Result:", result.Addr, "Version:", result.Version.Name)
-			fmt.Println(result.Players.Online, "/", result.Players.Max, "players online")
-		}
-	}()
+	// go func() {
+	// 	defer readWg.Done()
+	// 	for result := range results {
+	// 		fmt.Println("Result:", result.Addr, "Version:", result.Version.Name)
+	// 		fmt.Println(result.Players.Online, "/", result.Players.Max, "players online")
+	// 	}
+	// }()
+
+	go writer(results, errors, &readWg)
 
 	wg.Wait()
 	close(results)
 	close(errors)
 	readWg.Wait()
+}
+
+// TODO:
+// write data using https://github.com/hypermodeinc/badger
+func writer(results <-chan *ServerStatus, errors <-chan error, wg *sync.WaitGroup) {
+	defer wg.Done()
+	for {
+		select {
+		case result, ok := <-results:
+			if !ok {
+				results = nil
+			} else {
+				fmt.Println("Result:", result.Addr, "Version:", result.Version.Name)
+				fmt.Println(result.Players.Online, "/", result.Players.Max, "players online")
+			}
+		case err, ok := <-errors:
+			if !ok {
+				errors = nil
+			} else {
+				if strings.HasPrefix(err.Error(), "dial tcp") ||
+					strings.HasPrefix(err.Error(), "read tcp") ||
+					strings.HasSuffix(err.Error(), "connection reset by peer") {
+					continue
+				}
+				fmt.Println("Error:", err)
+			}
+		}
+		if results == nil && errors == nil {
+			break
+		}
+	}
 }
 
 func worker(jobs <-chan net.IP, results chan<- *ServerStatus, errors chan<- error, wg *sync.WaitGroup) {
