@@ -70,7 +70,7 @@ func writer(results <-chan *ServerStatus, errors <-chan error, wg *sync.WaitGrou
 			if !ok {
 				results = nil
 			} else {
-				fmt.Println("Result:", result.Addr, "Version:", result.Version.Name)
+				fmt.Println("Result:", result.Address, "Version:", result.Version.Name)
 				fmt.Println(result.Players.Online, "/", result.Players.Max, "players online")
 			}
 		case err, ok := <-errors:

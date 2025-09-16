@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
+	"time"
 
 	"github.com/google/uuid"
 )
@@ -56,7 +57,8 @@ type ServerStatusDTO struct {
 
 type ServerStatus struct {
 	ServerStatusDTO
-	net.Addr `json:"addr,omitempty"`
+	Address net.Addr  `json:"addr,omitempty"`
+	Time    time.Time `json:"time,omitempty"`
 
 	// IsFakeSample should take precedence over IsOnlineMode
 	IsFakeSample bool  `json:"isFakeSample"`
@@ -111,7 +113,8 @@ func ProcessJsonResponse(jsonStr string, addr net.Addr) (*ServerStatus, error) {
 		// no sample means we can't determine if it's online or offline mode
 		return &ServerStatus{
 			ServerStatusDTO: *ssDTO,
-			Addr:            addr,
+			Address:         addr,
+			Time:            time.Now(),
 
 			IsFakeSample: true,
 			IsOnlineMode: nil,
@@ -157,7 +160,8 @@ func ProcessJsonResponse(jsonStr string, addr net.Addr) (*ServerStatus, error) {
 
 	serverStatus := ServerStatus{
 		ServerStatusDTO: *ssDTO,
-		Addr:            addr,
+		Address:         addr,
+		Time:            time.Now(),
 
 		IsFakeSample: isFake,
 		IsOnlineMode: isOnline,
