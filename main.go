@@ -32,26 +32,6 @@ func main() {
 	var readWg sync.WaitGroup
 	readWg.Add(1)
 
-	// go func() {
-	// 	defer readWg.Done()
-	// 	for err := range errors {
-	// 		if strings.HasPrefix(err.Error(), "dial tcp") ||
-	// 			strings.HasPrefix(err.Error(), "read tcp") ||
-	// 			strings.HasSuffix(err.Error(), "connection reset by peer") {
-	// 			continue
-	// 		}
-	// 		fmt.Println("Error:", err)
-	// 	}
-	// }()
-
-	// go func() {
-	// 	defer readWg.Done()
-	// 	for result := range results {
-	// 		fmt.Println("Result:", result.Addr, "Version:", result.Version.Name)
-	// 		fmt.Println(result.Players.Online, "/", result.Players.Max, "players online")
-	// 	}
-	// }()
-
 	go writer(results, errors, &readWg)
 
 	wg.Wait()
@@ -60,10 +40,18 @@ func main() {
 	readWg.Wait()
 }
 
+var OKAY_ERRORS = []string{
+	"dial tcp",
+	"read tcp",
+	"connection reset by peer",
+	"malformed VarInt",
+}
+
 // TODO:
 // write data using https://github.com/hypermodeinc/badger
 func writer(results <-chan *ServerStatus, errors <-chan error, wg *sync.WaitGroup) {
 	defer wg.Done()
+	WriterLoop:
 	for {
 		select {
 		case result, ok := <-results:
@@ -77,10 +65,10 @@ func writer(results <-chan *ServerStatus, errors <-chan error, wg *sync.WaitGrou
 			if !ok {
 				errors = nil
 			} else {
-				if strings.HasPrefix(err.Error(), "dial tcp") ||
-					strings.HasPrefix(err.Error(), "read tcp") ||
-					strings.HasSuffix(err.Error(), "connection reset by peer") {
-					continue
+				for _, err_name := range(OKAY_ERRORS) {
+					if strings.HasPrefix(err.Error(), err_name) {
+						continue WriterLoop
+					}
 				}
 				fmt.Println("Error:", err)
 			}
@@ -99,7 +87,6 @@ func worker(jobs <-chan net.IP, results chan<- *ServerStatus, errors chan<- erro
 			errors <- err
 			continue
 		}
-		fmt.Println("worked")
 		results <- status
 	}
 }
