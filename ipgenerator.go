@@ -89,14 +89,19 @@ func GenerateAllowedRanges() []IPRange {
 	return allowed
 }
 
-func SendIPsToChannel(ips chan<- net.IP, ranges []IPRange) {
+func SendIPsToChannel(ips chan<- net.IP, ranges []IPRange, done <-chan struct{}) {
+	defer close(ips)
 	counter := 0
 	for _, r := range ranges {
 		for ip := r.start; bytes.Compare(ip, r.end) <= 0; ip = incrementIP(ip) {
-			ips <- ip
-			counter++
-			fmt.Printf("Sent: %d\r", counter)
+			select {
+			case ips <- ip:
+				counter++
+				fmt.Printf("Sent: %d\r", counter)
+			case <-done:
+				fmt.Printf("\nStopping IP generation at %d IPs sent\n", counter)
+				return
+			}
 		}
 	}
-	close(ips)
 }
