@@ -113,36 +113,7 @@ func writer(results <-chan *ServerStatus, errors <-chan ErrorWithIP, db *badger.
 			if !ok {
 				results = nil
 			} else {
-				fmt.Println("Result:", result.Address, "Version:", result.Version.Name)
-				fmt.Println(result.Players.Online, "/", result.Players.Max, "players online")
-				// key format is "ip:timestamp"
-
-				// IP stuff
-				tcpAddr, ok := result.Address.(*net.TCPAddr)
-				if !ok {
-					slog.Error("Address is not a TCPAddr", "address", result.Address.String())
-					continue
-				}
-				key := make([]byte, 0, len(tcpAddr.IP)+1+8)
-				key = append(key, tcpAddr.IP...)
-				key = append(key, ':')
-				// timestamp stuff
-				ts := make([]byte, 8)
-				binary.BigEndian.PutUint64(ts, uint64(result.Time.Unix()))
-				key = append(key, ts...)
-				bytes, err := cbor.Marshal(result)
-				if err != nil {
-					slog.Error("Failed to marshal result", "error", err)
-					continue
-				}
-				// write tuah
-				err = db.Update(func(txn *badger.Txn) error {
-					err := txn.Set(key, bytes)
-					return err
-				})
-				if err != nil {
-					slog.Error("Failed to write to database", "error", err)
-				}
+				processResult(result, db)
 			}
 		case err, ok := <-errors:
 			if !ok {
@@ -151,9 +122,47 @@ func writer(results <-chan *ServerStatus, errors <-chan ErrorWithIP, db *badger.
 				slog.Error(err.Err.Error(), "IP", err.IP.String(), "Port", err.Port)
 			}
 		}
+
 		if results == nil && errors == nil {
 			break
 		}
+	}
+}
+
+func processResult(result *ServerStatus, db *badger.DB) {
+	fmt.Println("Result:", result.Address, "Version:", result.Version.Name)
+	fmt.Println(result.Players.Online, "/", result.Players.Max, "players online")
+
+	// key format is "ip:timestamp"
+	tcpAddr, ok := result.Address.(*net.TCPAddr)
+	if !ok {
+		slog.Error("Address is not a TCPAddr", "address", result.Address.String())
+		return
+	}
+
+	// len + 1 + 8 because IP + ':' + timestamp (8 bytes)
+	key := make([]byte, 0, len(tcpAddr.IP)+1+8)
+	key = append(key, tcpAddr.IP...)
+	key = append(key, ':')
+
+	// timestamp stuff
+	ts := make([]byte, 8)
+	binary.BigEndian.PutUint64(ts, uint64(result.Time.Unix()))
+	key = append(key, ts...)
+
+	bytes, err := cbor.Marshal(result)
+	if err != nil {
+		slog.Error("Failed to marshal result", "error", err)
+		return
+	}
+
+	// write tuah
+	// set on that thang
+	err = db.Update(func(txn *badger.Txn) error {
+		return txn.Set(key, bytes)
+	})
+	if err != nil {
+		slog.Error("Failed to write to database", "error", err)
 	}
 }
 
