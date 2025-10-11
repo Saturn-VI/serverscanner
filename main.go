@@ -220,6 +220,13 @@ func GetServerStatus(ctx context.Context, ip net.IP, port int) (*ServerStatus, e
 		return nil, ctx.Err()
 	}
 
+	// Debug: Track GetServerStatus phases
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	default:
+	}
+
 	// Initial server connection
 	// brackets are there for IPv6
 	var d net.Dialer
@@ -230,7 +237,23 @@ func GetServerStatus(ctx context.Context, ip net.IP, port int) (*ServerStatus, e
 	}
 	defer conn.Close()
 
+	// force close connection if cancelled
+	go func() {
+		<-ctx.Done()
+		conn.Close()
+	}()
+
+	// set deadline to ensure reads don't block indefinitely
+	deadline := time.Now().Add(5 * time.Second)
+	conn.SetDeadline(deadline)
+
 	// Send handshake and status request packets
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	default:
+	}
+
 	hs := CreateHandshakePacket(address, uint16(DEFAULT_PORT), 1).ToBytes()
 	_, err = conn.Write(hs)
 	if err != nil {
@@ -250,6 +273,16 @@ func GetServerStatus(ctx context.Context, ip net.IP, port int) (*ServerStatus, e
 	var totalPacketLength int
 
 	for {
+		// Check for context cancellation before each read
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		default:
+		}
+
+		// Set a shorter read deadline to make this more responsive
+		conn.SetReadDeadline(time.Now().Add(500 * time.Millisecond))
+
 		n, err := conn.Read(tmp)
 		if err != nil {
 			if err.Error() == "EOF" {
