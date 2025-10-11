@@ -33,3 +33,6 @@ go.work.sum
 
 # database
 badger/
+
+# built binary
+serverscanner
