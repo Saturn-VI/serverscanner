@@ -244,7 +244,7 @@ func GetServerStatus(ctx context.Context, ip net.IP, port int) (*ServerStatus, e
 	}()
 
 	// set deadline to ensure reads don't block indefinitely
-	deadline := time.Now().Add(5 * time.Second)
+	deadline := time.Now().Add(10 * time.Second)
 	conn.SetDeadline(deadline)
 
 	// Send handshake and status request packets
@@ -279,9 +279,6 @@ func GetServerStatus(ctx context.Context, ip net.IP, port int) (*ServerStatus, e
 			return nil, ctx.Err()
 		default:
 		}
-
-		// Set a shorter read deadline to make this more responsive
-		conn.SetReadDeadline(time.Now().Add(500 * time.Millisecond))
 
 		n, err := conn.Read(tmp)
 		if err != nil {
