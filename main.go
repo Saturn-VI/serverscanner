@@ -59,12 +59,12 @@ func main() {
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
 
 	go func() {
-		fmt.Println("Signal handler goroutine started")
+		slog.Info("Signal handler goroutine started")
 		sig := <-sigs
 		fmt.Printf("\nReceived signal: %s. Shutting down...\n", sig)
 		cancel() // Cancel context to stop workers
 		close(done)
-		fmt.Println("Shutdown signal sent to all components")
+		slog.Info("Shutdown signal sent to all components")
 	}()
 
 	for _ = range workerCount {
@@ -83,19 +83,19 @@ func main() {
 	go writer(results, errors, db, &readWg)
 	// Keep signal handler alive and wait for workers to finish
 	wg.Wait()
-	fmt.Println("All workers finished.")
+	slog.Info("All workers finished.")
 	// can now safely close these channels
 	close(results)
 	close(errors)
-	fmt.Println("Results and errors channels closed.")
+	slog.Info("Results and errors channels closed.")
 	// wait for writer to finish processing everything
 	readWg.Wait()
-	fmt.Println("Writer has finished.")
+	slog.Info("Writer has finished.")
 
 	// Clean up signal handler
 	signal.Stop(sigs)
 	close(sigs)
-	fmt.Println("Signal handler cleaned up.")
+	slog.Info("Signal handler cleaned up.")
 }
 
 var OKAY_ERRORS = []string{
@@ -137,8 +137,7 @@ func writer(results <-chan *ServerStatus, errors <-chan ErrorWithIP, db *badger.
 }
 
 func processResult(result *ServerStatus, db *badger.DB) {
-	fmt.Println("Result:", result.Address, "Version:", result.Version.Name)
-	fmt.Println(result.Players.Online, "/", result.Players.Max, "players online")
+	slog.Info("Result", "Address", result.Address, "Version", result.Version.Name, "Online", result.Players.Online, "Max", result.Players.Max)
 
 	// key format is "ip:timestamp"
 	tcpAddr, ok := result.Address.(*net.TCPAddr)
