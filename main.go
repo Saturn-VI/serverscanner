@@ -54,6 +54,19 @@ func main() {
 	errors := make(chan ErrorWithIP, 100)
 	var wg sync.WaitGroup
 
+	// Set up signal handling first to avoid race conditions
+	sigs := make(chan os.Signal, 1)
+	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
+
+	go func() {
+		fmt.Println("Signal handler goroutine started")
+		sig := <-sigs
+		fmt.Printf("\nReceived signal: %s. Shutting down...\n", sig)
+		cancel() // Cancel context to stop workers
+		close(done)
+		fmt.Println("Shutdown signal sent to all components")
+	}()
+
 	for _ = range workerCount {
 		wg.Add(1)
 		go worker(ctx, jobs, results, errors, &wg)
@@ -68,16 +81,7 @@ func main() {
 	readWg.Add(1)
 
 	go writer(results, errors, db, &readWg)
-
-	sigs := make(chan os.Signal, 1)
-	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
-	go func() {
-		sig := <-sigs
-		fmt.Printf("\nReceived signal: %s. Shutting down...\n", sig)
-		cancel() // Cancel context to stop workers
-		close(done)
-	}()
-
+	// Keep signal handler alive and wait for workers to finish
 	wg.Wait()
 	fmt.Println("All workers finished.")
 	// can now safely close these channels
@@ -87,6 +91,11 @@ func main() {
 	// wait for writer to finish processing everything
 	readWg.Wait()
 	fmt.Println("Writer has finished.")
+
+	// Clean up signal handler
+	signal.Stop(sigs)
+	close(sigs)
+	fmt.Println("Signal handler cleaned up.")
 }
 
 var OKAY_ERRORS = []string{
@@ -103,8 +112,6 @@ type ErrorWithIP struct {
 	Err  error
 }
 
-// TODO:
-// write data using https://github.com/hypermodeinc/badger
 func writer(results <-chan *ServerStatus, errors <-chan ErrorWithIP, db *badger.DB, wg *sync.WaitGroup) {
 	defer wg.Done()
 	for {
