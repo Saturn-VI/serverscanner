@@ -139,15 +139,16 @@ func writer(results <-chan *ServerStatus, errors <-chan ErrorWithIP, db *badger.
 func processResult(result *ServerStatus, db *badger.DB) {
 	slog.Info("Result", "Address", result.Address, "Version", result.Version.Name, "Online", result.Players.Online, "Max", result.Players.Max)
 
-	// key format is "ip:timestamp"
+	// key format is "server:<ip>:<timestamp>"
 	tcpAddr, ok := result.Address.(*net.TCPAddr)
 	if !ok {
 		slog.Error("Address is not a TCPAddr", "address", result.Address.String())
 		return
 	}
 
-	// len + 1 + 8 because IP + ':' + timestamp (8 bytes)
-	key := make([]byte, 0, len(tcpAddr.IP)+1+8)
+	// 6 + len + 1 + 8 because 'server' (6 bytes) + IP + ':' + timestamp (8 bytes)
+	key := make([]byte, 0, 6+len(tcpAddr.IP)+1+8)
+	key = append(key, []byte("server:")...)
 	key = append(key, tcpAddr.IP...)
 	key = append(key, ':')
 
