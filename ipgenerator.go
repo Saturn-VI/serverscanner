@@ -31,11 +31,18 @@ var EXCLUDE_RANGES = [...]IPRange{
 	{start: net.IP{240, 0, 0, 0}, end: net.IP{255, 255, 255, 255}},
 }
 
+// Scan range limits
 var MAX_IP = net.IP{255, 255, 255, 255}
 var MIN_IP = net.IP{0, 0, 0, 0}
 
+// Absolute IPv4 bounds, used only to guard against overflow/underflow in
+// incrementIP/decrementIP. These are intentionally distinct from MIN_IP/MAX_IP,
+// which define the scan region rather than the address space limits.
+var ABSOLUTE_MAX_IP = net.IP{255, 255, 255, 255}
+var ABSOLUTE_MIN_IP = net.IP{0, 0, 0, 0}
+
 func incrementIP(ip net.IP) net.IP {
-	if ip.Equal(MAX_IP) {
+	if ip.Equal(ABSOLUTE_MAX_IP) {
 		return ip
 	}
 	newIP := make(net.IP, len(ip))
@@ -50,7 +57,7 @@ func incrementIP(ip net.IP) net.IP {
 }
 
 func decrementIP(ip net.IP) net.IP {
-	if ip.Equal(MIN_IP) {
+	if ip.Equal(ABSOLUTE_MIN_IP) {
 		return ip
 	}
 	newIP := make(net.IP, len(ip))
@@ -77,9 +84,18 @@ func GenerateAllowedRanges() []IPRange {
 	    if bytes.Compare(exclude.end, currentStart) < 0 {
 	        continue
 	    }
+		// Stop once we've moved past the end of our scan region
+		if bytes.Compare(currentStart, MAX_IP) > 0 {
+			break
+		}
 		// If there's a gap between currentStart and the start of the exclude range, add it to allowed
 		if bytes.Compare(currentStart, exclude.start) < 0 {
-			allowed = append(allowed, IPRange{start: currentStart, end: decrementIP(exclude.start)})
+			gapEnd := decrementIP(exclude.start)
+			// Clamp the gap to the end of our scan region
+			if bytes.Compare(gapEnd, MAX_IP) > 0 {
+				gapEnd = MAX_IP
+			}
+			allowed = append(allowed, IPRange{start: currentStart, end: gapEnd})
 		}
 		// Move currentStart to the end of the exclude range + 1
 		if bytes.Compare(incrementIP(exclude.end), currentStart) > 0 {
@@ -87,9 +103,9 @@ func GenerateAllowedRanges() []IPRange {
 	    }
 	}
 
-	// The last exclude range goes to 255.255.255.255, so this just goes to 240.0.0.0
-	if bytes.Compare(currentStart, net.IP{240, 0, 0, 0}) <= 0 {
-		allowed = append(allowed, IPRange{start: currentStart, end: net.IP{240, 0, 0, 0}})
+	// Add whatever remains up to the end of our scan region
+	if bytes.Compare(currentStart, MAX_IP) <= 0 {
+		allowed = append(allowed, IPRange{start: currentStart, end: MAX_IP})
 	}
 
 	return allowed
