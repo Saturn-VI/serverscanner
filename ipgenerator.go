@@ -70,15 +70,21 @@ func GenerateAllowedRanges() []IPRange {
 	var allowed []IPRange
 
 	// Start with the full range
-	currentStart := net.IP{0, 0, 0, 0}
+	currentStart := MIN_IP;
 
 	for _, exclude := range EXCLUDE_RANGES {
+	  	// Skip excludes entirely below our range
+	    if bytes.Compare(exclude.end, currentStart) < 0 {
+	        continue
+	    }
 		// If there's a gap between currentStart and the start of the exclude range, add it to allowed
 		if bytes.Compare(currentStart, exclude.start) < 0 {
 			allowed = append(allowed, IPRange{start: currentStart, end: decrementIP(exclude.start)})
 		}
 		// Move currentStart to the end of the exclude range + 1
-		currentStart = incrementIP(exclude.end)
+		if bytes.Compare(incrementIP(exclude.end), currentStart) > 0 {
+	        currentStart = incrementIP(exclude.end)
+	    }
 	}
 
 	// The last exclude range goes to 255.255.255.255, so this just goes to 240.0.0.0
